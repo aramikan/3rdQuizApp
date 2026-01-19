@@ -165,9 +165,9 @@
 
             // 1. 出題フェーズ
             if (!data.question) {
-                statusEl.innerText = "出題フェーズ：出題者が問題を入力します";
-
+                const hostName = players.host || "出題者";
                 if (myRole === "host") {
+                    statusEl.innerText = "出題フェーズ：問題を入力してください";
                     questionBox.innerHTML = `
                         <div class="w-full max-w-2xl mx-auto space-y-3">
                             <input id="q-input" class="w-full border-2 border-gray-300 bg-white rounded-xl px-4 py-3 text-lg text-gray-800 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-amber-400" placeholder="ここに問題文を入力してください">
@@ -177,8 +177,12 @@
                         </div>
                     `;
                 } else {
+                    statusEl.innerText = `出題フェーズ：${hostName}さんが問題を入力しています`;
                     questionBox.innerHTML = `
-                        <span class="text-xl md:text-2xl text-gray-600">出題者が問題を考えています...</span>
+                        <div class="w-full space-y-2">
+                            <span class="text-lg md:text-xl text-gray-600 block text-center mb-2">出題者：${hostName}さん</span>
+                            <span class="text-xl md:text-2xl text-gray-600 block text-center">問題を考えています...</span>
+                        </div>
                     `;
                 }
 
@@ -204,13 +208,23 @@
             const answers = data.answers || {};
             const answeredCount = Object.keys(answers).length;
 
+            const hostName = players.host || "出題者";
             questionBox.innerHTML = `
-                <span class="text-2xl md:text-3xl text-gray-800">${data.question}</span>
+                <div class="w-full space-y-3">
+                    <div class="text-sm md:text-base text-gray-600 text-center">出題者：${hostName}さん</div>
+                    <span class="text-2xl md:text-3xl text-gray-800 block">${data.question}</span>
+                </div>
             `;
 
-            statusEl.innerText = data.revealed
-                ? "オープンフェーズ：正解者にポイントを与えてください"
-                : `回答フェーズ：${answeredCount}/3人が回答完了`;
+            if (data.revealed) {
+                statusEl.innerText = myRole === "host" 
+                    ? "オープンフェーズ：正解者にポイントを与えてください"
+                    : `オープンフェーズ：${hostName}さんが正解者にポイントを付与しています`;
+            } else {
+                statusEl.innerText = myRole === "host"
+                    ? `回答フェーズ：${answeredCount}/3人が回答完了`
+                    : `回答フェーズ：${answeredCount}/3人が回答完了（出題者：${hostName}さん）`;
+            }
 
             const ids = ["player1", "player2", "player3"];
             ids.forEach((pid, idx) => {
@@ -221,18 +235,26 @@
                 let inner;
 
                 if (!data.revealed) {
-                    // 回答フェーズ表示
-                    if (isMe && !ans) {
+                    // 回答フェーズ表示（オープン前は修正可能）
+                    if (isMe) {
+                        // 自分の回答カード：回答済みでも修正可能
                         inner = `
                             <div class="w-full h-full flex flex-col items-center justify-center p-4 space-y-4">
                                 <div class="text-lg font-semibold mb-2 text-gray-700">${label}</div>
-                                <input id="a-input" class="w-full border-2 border-gray-300 bg-white rounded-xl px-3 py-2 text-base text-gray-800 focus:outline-none focus:ring-2 focus:ring-sky-400 focus:border-sky-400" placeholder="ここに回答を入力">
+                                ${ans ? `
+                                    <div class="w-full text-center mb-2">
+                                        <div class="text-emerald-600 text-sm font-semibold mb-1">✓ 回答送信済み</div>
+                                        <div class="text-xs text-gray-500">オープン前は修正可能です</div>
+                                    </div>
+                                ` : ""}
+                                <input id="a-input" value="${ans || ""}" class="w-full border-2 border-gray-300 bg-white rounded-xl px-3 py-2 text-base text-gray-800 focus:outline-none focus:ring-2 focus:ring-sky-400 focus:border-sky-400" placeholder="ここに回答を入力">
                                 <button onclick="sendAnswer()" class="w-full mt-1 px-4 py-2 rounded-xl bg-sky-500 hover:bg-sky-400 text-white font-semibold shadow-md shadow-sky-500/40 transition">
-                                    回答送信
+                                    ${ans ? "回答を更新" : "回答送信"}
                                 </button>
                             </div>
                         `;
                     } else if (ans) {
+                        // 他の人の回答カード（回答済み）
                         inner = `
                             <div class="w-full h-full flex flex-col items-center justify-center p-4 space-y-2">
                                 <div class="text-lg font-semibold mb-2 text-gray-700">${label}</div>
@@ -241,6 +263,7 @@
                             </div>
                         `;
                     } else {
+                        // 他の人の回答カード（未回答）
                         inner = `
                             <div class="w-full h-full flex flex-col items-center justify-center p-4 space-y-2">
                                 <div class="text-lg font-semibold mb-2 text-gray-700">${label}</div>
