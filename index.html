@@ -6,30 +6,35 @@
     <title>4人対戦クイズ</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script type="module">
-// Import the functions you need from the SDKs you need
-import { initializeApp } from "firebase/app";
-import { getAnalytics } from "firebase/analytics";
-// TODO: Add SDKs for Firebase products that you want to use
-// https://firebase.google.com/docs/web/setup#available-libraries
+        // Firebase SDK の読み込み
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getAnalytics } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-analytics.js";
+        import {
+            getDatabase,
+            ref,
+            onValue,
+            update,
+            set,
+            get
+        } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 
-// Your web app's Firebase configuration
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
-const firebaseConfig = {
-  apiKey: "AIzaSyDVqlFnC6jk0wHPPgotSPeUvjseoBbdJso",
-  authDomain: "rdgenquiz.firebaseapp.com",
-  projectId: "rdgenquiz",
-  storageBucket: "rdgenquiz.firebasestorage.app",
-  messagingSenderId: "303759529622",
-  appId: "1:303759529622:web:fcd67455991d1954b514b7",
-  measurementId: "G-YFB0DZWXJ0",
-  databaseURL: "https://rdgenquiz-default-rtdb.firebaseio.com"
-};
+        // Firebase 設定
+        const firebaseConfig = {
+            apiKey: "AIzaSyDVqlFnC6jk0wHPPgotSPeUvjseoBbdJso",
+            authDomain: "rdgenquiz.firebaseapp.com",
+            projectId: "rdgenquiz",
+            storageBucket: "rdgenquiz.firebasestorage.app",
+            messagingSenderId: "303759529622",
+            appId: "1:303759529622:web:fcd67455991d1954b514b7",
+            measurementId: "G-YFB0DZWXJ0",
+            databaseURL: "https://rdgenquiz-default-rtdb.firebaseio.com"
+        };
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
-const analytics = getAnalytics(app);
+        // Firebase 初期化
+        const app = initializeApp(firebaseConfig);
+        getAnalytics(app);
         const db = getDatabase(app);
-        const roomRef = ref(db, 'game-room');
+        const roomRef = ref(db, "game-room");
 
         // 状態管理用
         let myRole = ""; // "host" or "player1", "player2", "player3"
@@ -37,8 +42,8 @@ const analytics = getAnalytics(app);
         // --- 役割選択 ---
         window.selectRole = (role) => {
             myRole = role;
-            document.getElementById('setup').classList.add('hidden');
-            document.getElementById('game').classList.remove('hidden');
+            document.getElementById("setup").classList.add("hidden");
+            document.getElementById("game").classList.remove("hidden");
             initGame();
         };
 
@@ -51,14 +56,14 @@ const analytics = getAnalytics(app);
 
         // --- メインレンダリング ---
         function render(data) {
-            const statusEl = document.getElementById('status');
-            const actionArea = document.getElementById('action-area');
+            const statusEl = document.getElementById("status");
+            const actionArea = document.getElementById("action-area");
             actionArea.innerHTML = "";
 
             // 1. 出題フェーズ
             if (!data.question) {
                 statusEl.innerText = "出題者が問題を考えています...";
-                if (myRole === 'host') {
+                if (myRole === "host") {
                     actionArea.innerHTML = `
                         <input id="q-input" class="border p-2" placeholder="問題を入力">
                         <button onclick="sendQuestion()" class="bg-blue-500 text-white p-2 ml-2">出題する</button>
@@ -72,12 +77,12 @@ const analytics = getAnalytics(app);
             const answeredCount = Object.keys(answers).length;
             statusEl.innerText = `問題: ${data.question} (${answeredCount}/3人完了)`;
 
-            if (myRole !== 'host' && !answers[myRole]) {
+            if (myRole !== "host" && !answers[myRole]) {
                 actionArea.innerHTML = `
                     <input id="a-input" class="border p-2" placeholder="回答を入力">
                     <button onclick="sendAnswer()" class="bg-green-500 text-white p-2 ml-2">回答送信</button>
                 `;
-            } else if (myRole !== 'host' && answers[myRole]) {
+            } else if (myRole !== "host" && answers[myRole]) {
                 actionArea.innerHTML = `<p class="text-xl font-bold text-green-600">OK! 他の人を待っています...</p>`;
             }
 
@@ -126,7 +131,13 @@ const analytics = getAnalytics(app);
             }, { onlyOnce: true });
         };
 
-        window.resetGame = () => set(roomRef, { question: "", answers: {}, revealed: false, points: data.points || {} });
+        window.resetGame = async () => {
+            // 直前のポイントを保持したまま、問題と回答だけリセットする
+            const snap = await get(roomRef);
+            const current = snap.val() || {};
+            const points = current.points || {};
+            await set(roomRef, { question: "", answers: {}, revealed: false, points });
+        };
 
     </script>
 </head>
