@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>4人対戦クイズ</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script type="module">
+// Import the functions you need from the SDKs you need
+import { initializeApp } from "firebase/app";
+import { getAnalytics } from "firebase/analytics";
+// TODO: Add SDKs for Firebase products that you want to use
+// https://firebase.google.com/docs/web/setup#available-libraries
+
+// Your web app's Firebase configuration
+// For Firebase JS SDK v7.20.0 and later, measurementId is optional
+const firebaseConfig = {
+  apiKey: "AIzaSyDVqlFnC6jk0wHPPgotSPeUvjseoBbdJso",
+  authDomain: "rdgenquiz.firebaseapp.com",
+  projectId: "rdgenquiz",
+  storageBucket: "rdgenquiz.firebasestorage.app",
+  messagingSenderId: "303759529622",
+  appId: "1:303759529622:web:fcd67455991d1954b514b7",
+  measurementId: "G-YFB0DZWXJ0",
+  databaseURL: "https://rdgenquiz-default-rtdb.firebaseio.com"
+};
+
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+const analytics = getAnalytics(app);
+        const db = getDatabase(app);
+        const roomRef = ref(db, 'game-room');
+
+        // 状態管理用
+        let myRole = ""; // "host" or "player1", "player2", "player3"
+
+        // --- 役割選択 ---
+        window.selectRole = (role) => {
+            myRole = role;
+            document.getElementById('setup').classList.add('hidden');
+            document.getElementById('game').classList.remove('hidden');
+            initGame();
+        };
+
+        function initGame() {
+            onValue(roomRef, (snapshot) => {
+                const data = snapshot.val() || {};
+                render(data);
+            });
+        }
+
+        // --- メインレンダリング ---
+        function render(data) {
+            const statusEl = document.getElementById('status');
+            const actionArea = document.getElementById('action-area');
+            actionArea.innerHTML = "";
+
+            // 1. 出題フェーズ
+            if (!data.question) {
+                statusEl.innerText = "出題者が問題を考えています...";
+                if (myRole === 'host') {
+                    actionArea.innerHTML = `
+                        <input id="q-input" class="border p-2" placeholder="問題を入力">
+                        <button onclick="sendQuestion()" class="bg-blue-500 text-white p-2 ml-2">出題する</button>
+                    `;
+                }
+                return;
+            }
+
+            // 2. 回答フェーズ
+            const answers = data.answers || {};
+            const answeredCount = Object.keys(answers).length;
+            statusEl.innerText = `問題: ${data.question} (${answeredCount}/3人完了)`;
+
+            if (myRole !== 'host' && !answers[myRole]) {
+                actionArea.innerHTML = `
+                    <input id="a-input" class="border p-2" placeholder="回答を入力">
+                    <button onclick="sendAnswer()" class="bg-green-500 text-white p-2 ml-2">回答送信</button>
+                `;
+            } else if (myRole !== 'host' && answers[myRole]) {
+                actionArea.innerHTML = `<p class="text-xl font-bold text-green-600">OK! 他の人を待っています...</p>`;
+            }
+
+            // 3. オープンフェーズ（全員回答済み）
+            if (answeredCount >= 3) {
+                if (data.revealed) {
+                    // 結果表示
+                    statusEl.innerText = "回答一覧（正解者にポイントを！）";
+                    let html = "<ul>";
+                    for(let id in answers) {
+                        html += `<li class="mb-2">${id}: ${answers[id]} 
+                            ${myRole === 'host' ? `<button onclick="addPoint('${id}')" class="bg-yellow-500 text-xs p-1 ml-2">得点</button>` : ''}
+                        </li>`;
+                    }
+                    html += "</ul>";
+                    if (myRole === 'host') html += `<button onclick="resetGame()" class="mt-4 bg-red-500 text-white p-2">次の問題へ</button>`;
+                    actionArea.innerHTML = html;
+                } else if (myRole === 'host') {
+                    actionArea.innerHTML = `<button onclick="reveal()" class="bg-purple-500 text-white p-4 text-xl">回答をオープンする！</button>`;
+                }
+            }
+
+            // スコア表示
+            document.getElementById('scores').innerText = 
+                `スコア - P1: ${data.points?.player1 || 0} | P2: ${data.points?.player2 || 0} | P3: ${data.points?.player3 || 0}`;
+        }
+
+        // --- アクション関数 ---
+        window.sendQuestion = () => {
+            const q = document.getElementById('q-input').value;
+            update(roomRef, { question: q, answers: {}, revealed: false });
+        };
+
+        window.sendAnswer = () => {
+            const a = document.getElementById('a-input').value;
+            update(ref(db, `game-room/answers`), { [myRole]: a });
+        };
+
+        window.reveal = () => update(roomRef, { revealed: true });
+
+        window.addPoint = (id) => {
+            const scoreRef = ref(db, `game-room/points/${id}`);
+            onValue(scoreRef, (s) => {
+                const current = s.val() || 0;
+                set(scoreRef, current + 1);
+            }, { onlyOnce: true });
+        };
+
+        window.resetGame = () => set(roomRef, { question: "", answers: {}, revealed: false, points: data.points || {} });
+
+    </script>
+</head>
+<body class="bg-gray-100 p-8">
+    <div class="max-w-md mx-auto bg-white p-6 rounded shadow">
+        <h1 class="text-2xl font-bold mb-4">リアルタイム・クイズ</h1>
+        
+        <div id="setup" class="space-y-2">
+            <p>自分の役割を選んでください：</p>
+            <button onclick="selectRole('host')" class="w-full bg-blue-500 text-white p-2 rounded">出題者</button>
+            <button onclick="selectRole('player1')" class="w-full bg-gray-500 text-white p-2 rounded">回答者1</button>
+            <button onclick="selectRole('player2')" class="w-full bg-gray-500 text-white p-2 rounded">回答者2</button>
+            <button onclick="selectRole('player3')" class="w-full bg-gray-500 text-white p-2 rounded">回答者3</button>
+        </div>
+
+        <div id="game" class="hidden">
+            <div id="scores" class="mb-4 font-mono text-sm bg-gray-200 p-2"></div>
+            <h2 id="status" class="text-lg mb-4">待機中...</h2>
+            <div id="action-area"></div>
+        </div>
+    </div>
+</body>
+</html>
