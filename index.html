@@ -53,6 +53,36 @@
             document.getElementById("setup").classList.remove("hidden");
         };
 
+        // --- あそびかた（モーダル） ---
+        window.openHowTo = () => {
+            document.getElementById("howto-modal").classList.remove("hidden");
+        };
+
+        window.closeHowTo = () => {
+            document.getElementById("howto-modal").classList.add("hidden");
+        };
+
+        window.handleHowToBackdrop = (e) => {
+            // 背景クリックで閉じる
+            if (e.target?.id === "howto-modal") window.closeHowTo();
+        };
+
+        // --- テキスト入力：自動伸長（折り返し） ---
+        window.autoResize = (el) => {
+            if (!el) return;
+            el.style.height = "auto";
+            el.style.height = `${el.scrollHeight}px`;
+        };
+
+        function escapeHtml(str) {
+            return String(str ?? "")
+                .replaceAll("&", "&amp;")
+                .replaceAll("<", "&lt;")
+                .replaceAll(">", "&gt;")
+                .replaceAll("\"", "&quot;")
+                .replaceAll("'", "&#39;");
+        }
+
         // --- 役割選択 ---
         window.selectRole = async (role) => {
             myRole = role;
@@ -83,11 +113,15 @@
             const hostControls = document.getElementById("host-controls");
             const roleLabel = document.getElementById("role-label");
 
+            // 左上の不要なスコアボックスを隠す
+            const scoresEl = document.getElementById("scores");
+            if (scoresEl) scoresEl.style.display = "none";
+
             answersContainer.innerHTML = "";
             hostControls.innerHTML = "";
 
-            // ロール表示（名前も表示）
             const players = data.players || {};
+            const points = data.points || {};
             const roleMap = {
                 host: "出題者",
                 player1: "回答者1",
@@ -97,232 +131,148 @@
             const displayName = players[myRole] || roleMap[myRole] || "";
             roleLabel.innerText = myRole ? `あなた：${displayName}（${roleMap[myRole] || ""}）` : "";
 
-            // 0. 結果発表フェーズ（出題終了後）
+            // 0. 結果発表フェーズ (ここが消えていたため復元)
             if (data.gameFinished) {
-                statusEl.innerText = "🎉 結果発表 🎉";
-                const points = data.points || {};
-                const scores = [
+                statusEl.innerText = "🎉 最終結果発表 🎉";
+                const scoreData = [
                     { id: "player1", label: players.player1 || "回答者1", score: points.player1 || 0 },
                     { id: "player2", label: players.player2 || "回答者2", score: points.player2 || 0 },
                     { id: "player3", label: players.player3 || "回答者3", score: points.player3 || 0 },
                 ];
-                scores.sort((a, b) => b.score - a.score);
+                scoreData.sort((a, b) => b.score - a.score);
 
                 questionBox.innerHTML = `
-                    <div class="w-full space-y-6">
-                        <div class="text-3xl md:text-4xl font-bold text-center text-gray-800 mb-6">
-                            最終結果
-                        </div>
-                        <div class="space-y-4">
-                            ${scores.map((s, idx) => {
-                                const rank = idx + 1;
-                                const medal = rank === 1 ? "🥇" : rank === 2 ? "🥈" : rank === 3 ? "🥉" : "";
-                                const bgColor = rank === 1 ? "from-yellow-100 to-amber-100" : rank === 2 ? "from-gray-100 to-slate-100" : rank === 3 ? "from-orange-100 to-amber-100" : "from-gray-50 to-gray-100";
-                                return `
-                                    <div class="border-4 border-gray-300 rounded-2xl bg-gradient-to-r ${bgColor} p-6 flex items-center justify-between">
-                                        <div class="flex items-center gap-4">
-                                            <span class="text-4xl">${medal}</span>
-                                            <span class="text-2xl md:text-3xl font-bold text-gray-800">${s.label}</span>
-                                        </div>
-                                        <span class="text-3xl md:text-4xl font-extrabold text-gray-800">${s.score}点</span>
+                    <div class="w-full space-y-4 py-4">
+                        ${scoreData.map((s, idx) => {
+                            const rank = idx + 1;
+                            const medal = rank === 1 ? "🥇" : rank === 2 ? "🥈" : rank === 3 ? "🥉" : "";
+                            const bgColor = rank === 1 ? "from-yellow-100 to-amber-100 border-amber-400" : "from-gray-50 to-gray-100 border-gray-300";
+                            return `
+                                <div class="border-4 rounded-2xl bg-gradient-to-r ${bgColor} p-4 flex items-center justify-between shadow-sm">
+                                    <div class="flex items-center gap-3">
+                                        <span class="text-2xl">${medal}</span>
+                                        <span class="text-xl font-bold text-gray-800">${s.label}</span>
                                     </div>
-                                `;
-                            }).join("")}
-                        </div>
+                                    <span class="text-2xl font-extrabold text-gray-800">${s.score}点</span>
+                                </div>
+                            `;
+                        }).join("")}
                     </div>
                 `;
 
-                answersContainer.innerHTML = "";
-
                 if (myRole === "host") {
                     hostControls.innerHTML = `
-                        <div class="flex flex-col md:flex-row gap-3">
-                            <button onclick="restartGame()" class="px-8 py-3 rounded-2xl bg-green-500 hover:bg-green-400 text-white font-bold text-lg shadow-lg shadow-green-500/40 transition">
-                                新しいゲームを始める
-                            </button>
-                            <button onclick="leaveGame()" class="px-8 py-3 rounded-2xl bg-gray-500 hover:bg-gray-400 text-white font-bold text-lg shadow-lg shadow-gray-500/40 transition">
-                                退出する
-                            </button>
+                        <div class="flex flex-col sm:flex-row gap-3">
+                            <button onclick="restartGame()" class="px-8 py-3 rounded-2xl bg-green-500 hover:bg-green-400 text-white font-bold shadow-lg transition">新しいゲームを始める</button>
+                            <button onclick="leaveGame()" class="px-8 py-3 rounded-2xl bg-gray-500 hover:bg-gray-400 text-white font-bold shadow-lg transition">役割選択に戻る</button>
                         </div>
                     `;
                 } else {
                     hostControls.innerHTML = `
-                        <div class="flex flex-col gap-3">
-                            <p class="text-gray-600 text-center">出題者が新しいゲームを開始するまでお待ちください...</p>
-                            <button onclick="leaveGame()" class="px-8 py-3 rounded-2xl bg-gray-500 hover:bg-gray-400 text-white font-bold text-lg shadow-lg shadow-gray-500/40 transition">
-                                退出する
-                            </button>
+                        <div class="flex flex-col items-center gap-4">
+                            <p class="text-gray-600 font-medium">出題者が新しいゲームを開始するまでお待ちください...</p>
+                            <button onclick="leaveGame()" class="px-8 py-3 rounded-2xl bg-gray-500 hover:bg-gray-400 text-white font-bold shadow-lg transition">役割選択に戻る</button>
                         </div>
                     `;
                 }
-
-                // スコア表示
-                document.getElementById("scores").innerText =
-                    `スコア - P1: ${points.player1 || 0} | P2: ${points.player2 || 0} | P3: ${points.player3 || 0}`;
-
-                return;
+                return; // 結果発表時はここで終了
             }
 
-            // 1. 出題フェーズ
+            // --- 共通：回答カードの生成ロジック ---
+            const ids = ["player1", "player2", "player3"];
+            const answers = data.answers || {};
+            const answeredCount = Object.keys(answers).length;
+
+            // 1. お題エリアの表示
             if (!data.question) {
                 const hostName = players.host || "出題者";
                 if (myRole === "host") {
                     statusEl.innerText = "出題フェーズ：問題を入力してください";
                     questionBox.innerHTML = `
                         <div class="w-full max-w-2xl mx-auto space-y-3">
-                            <input id="q-input" class="w-full border-2 border-gray-300 bg-white rounded-xl px-4 py-3 text-lg text-gray-800 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-amber-400" placeholder="ここに問題文を入力してください">
-                            <button onclick="sendQuestion()" class="w-full md:w-auto px-6 py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-white font-bold shadow-lg shadow-amber-500/40 transition">
-                                出題する
-                            </button>
+                            <textarea id="q-input" rows="1" oninput="autoResize(this)" class="w-full border-2 border-gray-300 bg-white rounded-xl px-4 py-3 text-lg text-gray-800 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-amber-400 resize-none overflow-hidden" placeholder="ここに問題文を入力してください"></textarea>
+                            <button onclick="sendQuestion()" class="w-full md:w-auto px-6 py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-white font-bold shadow-lg shadow-amber-500/40 transition">出題する</button>
                         </div>
                     `;
+                    requestAnimationFrame(() => window.autoResize(document.getElementById("q-input")));
                 } else {
                     statusEl.innerText = `出題フェーズ：${hostName}さんが問題を入力しています`;
-                    questionBox.innerHTML = `
-                        <div class="w-full space-y-2">
-                            <span class="text-lg md:text-xl text-gray-600 block text-center mb-2">出題者：${hostName}さん</span>
-                            <span class="text-xl md:text-2xl text-gray-600 block text-center">問題を考えています...</span>
-                        </div>
-                    `;
+                    questionBox.innerHTML = `<div class="w-full space-y-2"><span class="text-xl md:text-2xl text-gray-600 block text-center font-bold">問題を考えています...</span></div>`;
                 }
-
-                // 回答カードは空の状態で表示
-                const ids = ["player1", "player2", "player3"];
-                ids.forEach((pid, idx) => {
-                    const label = (data.players && data.players[pid]) || `回答者${idx + 1}`;
-                    answersContainer.innerHTML += `
-                        <div class="border-4 border-gray-300 rounded-2xl bg-gray-50 min-h-[140px] flex items-center justify-center text-xl font-semibold text-gray-500">
-                            ${label}：まだお題待ちです
-                        </div>
-                    `;
-                });
-
-                // スコア表示
-                document.getElementById("scores").innerText =
-                    `スコア - P1: ${data.points?.player1 || 0} | P2: ${data.points?.player2 || 0} | P3: ${data.points?.player3 || 0}`;
-
-                return;
-            }
-
-            // 2. 回答フェーズ / オープンフェーズ 共通
-            const answers = data.answers || {};
-            const answeredCount = Object.keys(answers).length;
-
-            const hostName = players.host || "出題者";
-            questionBox.innerHTML = `
-                <div class="w-full space-y-3">
-                    <div class="text-sm md:text-base text-gray-600 text-center">出題者：${hostName}さん</div>
-                    <span class="text-2xl md:text-3xl text-gray-800 block">${data.question}</span>
-                </div>
-            `;
-
-            if (data.revealed) {
-                statusEl.innerText = myRole === "host" 
-                    ? "オープンフェーズ：正解者にポイントを与えてください"
-                    : `オープンフェーズ：${hostName}さんが正解者にポイントを付与しています`;
             } else {
-                statusEl.innerText = myRole === "host"
-                    ? `回答フェーズ：${answeredCount}/3人が回答完了`
-                    : `回答フェーズ：${answeredCount}/3人が回答完了（出題者：${hostName}さん）`;
+                const hostName = players.host || "出題者";
+                questionBox.innerHTML = `<div class="w-full space-y-3"><div class="text-sm md:text-base text-gray-600 text-center font-bold">出題者：${hostName}さん</div><span class="text-2xl md:text-3xl text-gray-800 block">${data.question}</span></div>`;
+                statusEl.innerText = data.revealed ? "オープンフェーズ" : `回答フェーズ：${answeredCount}/3人が回答完了`;
             }
 
-            const ids = ["player1", "player2", "player3"];
+            // 2. 回答カードのレンダリング
             ids.forEach((pid, idx) => {
                 const label = players[pid] || `回答者${idx + 1}`;
+                const score = points[pid] || 0;
                 const isMe = myRole === pid;
                 const ans = answers[pid];
 
-                let inner;
+                // スコアバッジ（名前の上に配置）
+                const scoreBadge = `
+                    <div class="mb-1">
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                            ${score} 点
+                        </span>
+                    </div>`;
 
-                if (!data.revealed) {
-                    // 回答フェーズ表示（オープン前は修正可能）
+                let inner;
+                if (!data.question) {
+                    inner = `${scoreBadge}<div class="text-lg font-semibold text-gray-700">${label}</div><div class="text-sm text-gray-400 font-bold">お題待ち...</div>`;
+                } else if (!data.revealed) {
+                    // 回答中
                     if (isMe) {
-                        // 自分の回答カード：回答済みでも修正可能
                         inner = `
-                            <div class="w-full h-full flex flex-col items-center justify-center p-4 space-y-4">
-                                <div class="text-lg font-semibold mb-2 text-gray-700">${label}</div>
-                                ${ans ? `
-                                    <div class="w-full text-center mb-2">
-                                        <div class="text-emerald-600 text-sm font-semibold mb-1">✓ 回答送信済み</div>
-                                        <div class="text-xs text-gray-500">オープン前は修正可能です</div>
-                                    </div>
-                                ` : ""}
-                                <input id="a-input" value="${ans || ""}" class="w-full border-2 border-gray-300 bg-white rounded-xl px-3 py-2 text-base text-gray-800 focus:outline-none focus:ring-2 focus:ring-sky-400 focus:border-sky-400" placeholder="ここに回答を入力">
-                                <button onclick="sendAnswer()" class="w-full mt-1 px-4 py-2 rounded-xl bg-sky-500 hover:bg-sky-400 text-white font-semibold shadow-md shadow-sky-500/40 transition">
-                                    ${ans ? "回答を更新" : "回答送信"}
-                                </button>
-                            </div>
+                            ${scoreBadge}
+                            <div class="text-lg font-semibold text-gray-700 mb-2">${label}</div>
+                            <textarea id="a-input" rows="1" oninput="autoResize(this)" class="w-full border-2 border-gray-300 bg-white rounded-xl px-3 py-2 text-base text-gray-800 mb-2 resize-none overflow-hidden" placeholder="回答を入力">${escapeHtml(ans || "")}</textarea>
+                            
+                            ${ans ? 
+                                `<button onclick="sendAnswer()" class="w-full px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-white font-semibold shadow-md transition transform active:scale-95">回答を更新する</button>` : 
+                                `<button onclick="sendAnswer()" class="w-full px-4 py-2 rounded-xl bg-sky-500 hover:bg-sky-400 text-white font-semibold shadow-lg shadow-sky-500/30 transition transform active:scale-95">回答を送信する</button>`
+                            }
                         `;
-                    } else if (ans) {
-                        // 他の人の回答カード（回答済み）
-                        inner = `
-                            <div class="w-full h-full flex flex-col items-center justify-center p-4 space-y-2">
-                                <div class="text-lg font-semibold mb-2 text-gray-700">${label}</div>
-                                <div class="text-emerald-600 text-xl font-bold">OK</div>
-                                <div class="text-sm text-gray-500">回答送信済み</div>
-                            </div>
-                        `;
+                        requestAnimationFrame(() => window.autoResize(document.getElementById("a-input")));
                     } else {
-                        // 他の人の回答カード（未回答）
-                        inner = `
-                            <div class="w-full h-full flex flex-col items-center justify-center p-4 space-y-2">
-                                <div class="text-lg font-semibold mb-2 text-gray-700">${label}</div>
-                                <div class="text-gray-500 text-xl font-bold">待機中...</div>
-                                <div class="text-sm text-gray-400">まだ回答していません</div>
-                            </div>
-                        `;
+                        inner = `${scoreBadge}<div class="text-lg font-semibold text-gray-700 mb-2">${label}</div><div class="${ans ? 'text-emerald-600' : 'text-gray-500'} font-bold text-xl">${ans ? 'OK' : '待機中...'}</div>`;
                     }
                 } else {
-                    // オープンフェーズ表示（回答オープン後）
                     inner = `
-                        <div class="w-full h-full flex flex-col items-center justify-between p-4 space-y-3">
-                            <div class="text-lg font-semibold mb-1 text-gray-700">${label}</div>
-                            <div class="flex-1 flex items-center justify-center">
-                                <span class="text-xl break-words text-gray-800">${ans ?? "（無回答）"}</span>
-                            </div>
-                            <div class="w-full pt-2">
-                                ${myRole === "host" ? `
-                                    <button onclick="addPoint('${pid}')" class="w-full px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-white font-semibold shadow-md shadow-amber-500/40 transition">
-                                        ポイント
-                                    </button>
-                                ` : ""}
-                            </div>
-                        </div>
+                        ${scoreBadge}
+                        <div class="text-lg font-semibold text-gray-700 mb-1">${label}</div>
+                        <div class="flex-1 flex items-center justify-center py-2 px-2"><span class="text-xl text-gray-800 font-bold break-all leading-tight">${ans ?? "（無回答）"}</span></div>
+                        ${myRole === "host" ? `<button onclick="addPoint('${pid}')" class="w-full px-4 py-2 rounded-xl bg-amber-500 text-white font-semibold shadow-md transition hover:scale-105">ポイント</button>` : ""}
                     `;
                 }
 
                 answersContainer.innerHTML += `
-                    <div class="border-4 border-gray-300 rounded-2xl bg-gray-50 min-h-[160px]">
+                    <div class="border-4 border-gray-300 rounded-2xl bg-gray-50 min-h-[160px] flex flex-col items-center justify-center p-4 text-center shadow-inner">
                         ${inner}
                     </div>
                 `;
             });
 
-            // 3. ホスト用コントロール（オープンボタン・次の問題へ・出題終了）
-            if (myRole === "host") {
+            // 3. ホスト用コントロール
+            if (myRole === "host" && data.question) {
                 if (!data.revealed && answeredCount >= 3) {
-                    hostControls.innerHTML = `
-                        <button onclick="reveal()" class="px-8 py-3 rounded-2xl bg-purple-500 hover:bg-purple-400 text-white font-bold text-lg shadow-lg shadow-purple-500/40 transition">
-                            回答をオープンする！
-                        </button>
-                    `;
+                    hostControls.innerHTML = `<button onclick="reveal()" class="px-8 py-3 rounded-2xl bg-purple-500 hover:bg-purple-400 text-white font-bold text-lg shadow-lg transition transform hover:scale-105">回答をオープンする！</button>`;
                 } else if (data.revealed) {
                     hostControls.innerHTML = `
-                        <div class="flex flex-col md:flex-row gap-3">
-                            <button onclick="resetGame()" class="px-8 py-3 rounded-2xl bg-rose-500 hover:bg-rose-400 text-white font-bold text-lg shadow-lg shadow-rose-500/40 transition">
+                        <div class="flex flex-col sm:flex-row gap-3">
+                            <button onclick="resetGame()" class="px-6 py-3 rounded-2xl bg-sky-500 hover:bg-sky-400 text-white font-bold transition shadow-lg">
                                 次の問題へ
                             </button>
-                            <button onclick="endGame()" class="px-8 py-3 rounded-2xl bg-red-600 hover:bg-red-500 text-white font-bold text-lg shadow-lg shadow-red-600/40 transition">
+                            <button onclick="endGame()" class="px-6 py-3 rounded-2xl bg-red-600 hover:bg-red-500 text-white font-bold transition shadow-lg">
                                 出題終了
                             </button>
                         </div>
                     `;
                 }
             }
-
-            // スコア表示
-            document.getElementById("scores").innerText =
-                `スコア - P1: ${data.points?.player1 || 0} | P2: ${data.points?.player2 || 0} | P3: ${data.points?.player3 || 0}`;
         }
 
         // --- アクション関数 ---
@@ -389,7 +339,7 @@
     </script>
 </head>
 <body class="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center p-4">
-    <div class="w-full max-w-5xl bg-white border-2 border-gray-200 rounded-2xl shadow-2xl shadow-gray-200/50 p-6 md:p-10 text-gray-800">
+    <div class="relative w-full max-w-5xl bg-white border-2 border-gray-200 rounded-2xl shadow-2xl shadow-gray-200/50 p-6 md:p-10 text-gray-800">
         <h1 class="text-3xl md:text-4xl font-extrabold tracking-wide mb-6 text-center bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent">
             わかりて選手権
         </h1>
@@ -402,6 +352,51 @@
                 <button onclick="submitName()" class="w-full py-3 px-4 rounded-xl bg-blue-500 hover:bg-blue-400 text-white font-semibold shadow-lg shadow-blue-500/40 transition">
                     決定
                 </button>
+            </div>
+        </div>
+
+        <!-- あそびかた（モーダル） -->
+        <div id="howto-modal" class="hidden fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onclick="handleHowToBackdrop(event)">
+            <div class="w-full max-w-2xl bg-white rounded-2xl border-2 border-gray-200 shadow-2xl shadow-gray-300/50 overflow-hidden">
+                <div class="px-5 py-4 border-b border-gray-200 flex items-center justify-between">
+                    <div class="text-lg md:text-xl font-bold text-gray-800">あそびかた</div>
+                    <button onclick="closeHowTo()" class="px-3 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold transition">
+                        閉じる
+                    </button>
+                </div>
+                <div class="px-5 py-5 space-y-5 text-gray-800">
+                    <div class="space-y-2">
+                        <div class="font-bold">1. 参加</div>
+                        <ul class="list-disc pl-5 text-gray-700 space-y-1">
+                            <li>最初に <b>名前</b> を入力して「決定」</li>
+                            <li>次に <b>出題者</b> または <b>回答者1〜3</b> を選びます</li>
+                        </ul>
+                    </div>
+
+                    <div class="space-y-2">
+                        <div class="font-bold">2. ゲームの流れ</div>
+                        <ul class="list-disc pl-5 text-gray-700 space-y-1">
+                            <li><b>出題者</b> が問題を入力して「出題する」</li>
+                            <li><b>回答者</b> は回答を入力して送信（<b>オープン前は何度でも修正可能</b>）</li>
+                            <li>全員の回答がそろったら、出題者が「<b>回答をオープンする！</b>」</li>
+                            <li>出題者が正解者に「<b>ポイント</b>」で得点付与</li>
+                            <li>「次の問題へ」でスコアを残して次の問題へ</li>
+                        </ul>
+                    </div>
+
+                    <div class="space-y-2">
+                        <div class="font-bold">3. 出題終了・結果発表</div>
+                        <ul class="list-disc pl-5 text-gray-700 space-y-1">
+                            <li>出題者が「<b>出題終了</b>」を押すと <b>最終結果</b> を表示します</li>
+                            <li>結果発表画面では「<b>退出する</b>」で役割選択からやり直せます</li>
+                            <li>出題者は「<b>新しいゲームを始める</b>」でスコアも含めてリセットできます</li>
+                        </ul>
+                    </div>
+
+                    <div class="text-xs text-gray-500">
+                        ヒント：複数人で遊ぶときは、ブラウザのタブ/別端末でそれぞれ開いて参加してください。
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -423,7 +418,7 @@
             </div>
         </div>
 
-        <div id="game" class="hidden space-y-6">
+        <div id="game" class="hidden space-y-6 pb-16">
             <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
                 <div id="scores" class="font-mono text-sm bg-gray-100 border-2 border-gray-300 rounded px-3 py-2 text-gray-800"></div>
                 <div id="role-label" class="text-sm text-gray-600 font-semibold"></div>
@@ -444,6 +439,12 @@
                 <!-- JS からカードを差し込む -->
             </div>
         </div>
+
+        <!-- 全画面共通：あそびかた（パネル内 右下） -->
+        <button onclick="openHowTo()"
+            class="absolute bottom-4 right-4 md:bottom-6 md:right-6 z-40 px-4 py-2 rounded-full bg-white/90 hover:bg-white text-gray-800 font-semibold border-2 border-gray-300 shadow-lg shadow-gray-300/40 backdrop-blur transition">
+            あそびかた
+        </button>
     </div>
 </body>
 </html>
